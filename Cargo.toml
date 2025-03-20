@@ -1,0 +1,8 @@
+[package]
+name = "tui-rule"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+colorgrad = "0.7.0"
+ratatui = "0.29.0"
