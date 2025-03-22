@@ -1,7 +1,6 @@
 use colorgrad::Gradient;
-use VerticalAlignent as VAlignment;
 use ratatui::{
-    prelude::{Alignment, Buffer, Color, Rect, Span, Style},
+    prelude::{Alignment, Margin, Buffer, Color, Rect, Span, Style},
     text::Line,
     widgets::Widget,
 };
@@ -10,15 +9,10 @@ pub struct Rule {
     pub start: char,
     pub end: char,
     pub center: char,
-    pub left_center: char,
-    pub right_center: char,
     pub right_symbol: char,
     pub left_symbol: char,
     pub orientation: Orientation,
-    pub left_margin: u16,
-    pub right_margin: u16,
-    pub top_margin: u16,
-    pub bottom_margin: u16,
+    pub margin: Margin,
     pub vertical_alignment: VerticalAlignment,
     pub horizontal_alignment: Alignment,
 }
@@ -35,19 +29,17 @@ pub enum VerticalAlignment {
 }
 #[macro_export]
 macro_rules! generate_gradient_text {
-    ($ln:expr, $gr:expr) => {
-        $ln.spans
-            .iter()
-            .zip($gr.colors($ln.width()))
-            .map(|(span, color)| {
-                span.clone().style(Style::new().fg(Color::Rgb(
-                    (color.r * 255.0) as u8,
-                    (color.g * 255.0) as u8,
-                    (color.b * 255.0) as u8,
-                )))
-            })
-            .collect()
-    };
+    ($ln:expr, $gr:expr) => {{
+        let mut new_text = Vec::new();
+        for (s, c) in $ln.spans.into_iter().zip($gr.colors($ln.width())) {
+            new_text.push(s.style(Style::new().fg(Color::Rgb(
+                (c.r * 255.0) as u8,
+                (c.g * 255.0) as u8,
+                (c.b * 255.0) as u8,
+            ))));
+        }
+        new_text
+    }};
 }
 impl Default for Rule {
     fn default() -> Self {
@@ -61,17 +53,12 @@ impl Rule {
             start: '━',
             end: '━',
             center: '━',
-            right_center: '━',
-            left_center: '━',
             left_symbol: '━',
             right_symbol: '━',
-            top_margin: 0,
-            left_margin: 0,
-            bottom_margin: 0,
-            right_margin: 0,
+            margin: Margin::new(0, 0),
             orientation: Orientation::Horizontal,
             horizontal_alignment: Alignment::Left,
-            vertical_alignment: VAlignment::Top,
+            vertical_alignment: VerticalAlignment::Top,
         }
     }
     pub fn new_with_gradient<G: Gradient + 'static>(gradient: G) -> Self {
@@ -81,21 +68,20 @@ impl Rule {
         self.gradient = Some(Box::<G>::new(gradient));
         self
     }
-    pub fn horizontal(mut self)
- -> Self {
-     self.orientation = Orientation::Horizontal;
-     self
- }
-    pub fn vertical(mut self) -> Self {
-        self.orientation = Orientation::Vertical;
+    pub fn horizontal_margin(mut self, margin: u16) -> Self {
+        self.margin.horizontal = margin;
         self
     }
-    pub fn main_symbol(mut self, symb: char) -> Self {
-        self = self
-            .left_symbol(symb)
-            .right_symbol(symb)
-            .left_center(symb)
-            .right_center(symb);
+    pub fn vertical_margin(mut self, margin: u16) -> Self {
+        self.margin.vertical = margin;
+        self
+    }
+    pub fn horizontal(mut self) -> Self {
+        self.orientation = Orientation::Horizontal;
+        self
+    }
+    pub fn vertical(mut self) -> Self {
+        self.orientation = Orientation::Vertical;
         self
     }
     pub fn right_symbol(mut self, symb: char) -> Self {
@@ -112,10 +98,11 @@ impl Rule {
         self
     }
     /// last symbol
-    ```rust
-        Rule::default().end('%');
-    ```
-    `+=====+=====%`
+    ///```rust
+    ///     Rule::default().end('%');
+    /// ```
+    /// `+=====+=====%`
+
     pub fn end(mut self, symb: char) -> Self {
         self.end = symb;
         self
@@ -126,54 +113,14 @@ impl Rule {
         self.center = symb;
         self
     }
-    /// center symbol for right side
-    /// ```rust
-    /// Rule::default().right_center(' ')
-    /// ``` `+=====+== ==+`
-    pub fn right_center(mut self, symb: char) -> Self {
-        self.right_center = symb;
-        self
-    }
-
-    pub fn left_center(mut self, symb: char) -> Self {
-        self.left_center = symb;
-        self
-    }
-    /// the right_center, center, and left_center functions all in one
-    pub fn main_center(mut self, symb: char) -> Self {
-        self = self.right_center(symb).left_center(symb).center(symb);
-        self
-    }
-    pub fn left_margin(mut self, margin: u16) -> Self {
-        self.left_margin = margin;
-        self
-    }
-    pub fn right_margin(mut self, margin: u16) -> Self {
-        self.right_margin = margin;
-        self
-    }
-    pub fn top_margin(mut self, margin: u16) -> Self {
-        self.top_margin = margin;
-        self
-    }
-    pub fn bottom_margin(mut self, margin: u16) -> Self {
-        self.bottom_margin = margin;
-        self
-    }
-    pub fn horizontal_margin(mut self, margin: u16) -> Self {
-        self = self.left_margin(margin).right_margin(margin);
-        self
-    }
-    pub fn vertical_margin(mut self, margin: u16) -> Self {
-        self = self.top_margin(margin).bottom_margin(margin);
-        self
-    }
-    pub fn margin(mut self, margin: u16) -> Self {
+    pub fn main_symbol(mut self, symb: char) -> Self {
         self = self
-            .left_margin(margin)
-            .right_margin(margin)
-            .top_margin(margin)
-            .bottom_margin(margin);
+            .left_symbol(symb)
+            .right_symbol(symb);
+        self
+    }
+    pub fn margin(mut self, margin: Margin) -> Self {
+        self.margin = margin;
         self
     }
     pub fn orientation(mut self, orientation: Orientation) -> Self {
@@ -190,61 +137,90 @@ impl Rule {
     }
 }
 impl Widget for Rule {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let area = Rect {
-            width: area
-                .width
-                .saturating_sub(self.left_margin + self.right_margin + 2),
-            height: area
-                .height
-                .saturating_sub(self.top_margin + self.bottom_margin + 2),
-            x: match self.horizontal_alignment {
-                Alignment::Left => area.x,
-                Alignment::Center => area.right() / 2,
-                Alignment::Right => area.right().saturating_sub(1)
-            } + self.left_margin.saturating_sub(self.right_margin()) + 1,
-            y: match self.vertical_alignment {
-                VAlignment::Top => area.y
-                VAlignment::Center => area.bottom() / 2,
-                VAlignment::Bottom => area.bottom().saturating_sub(1)
-            } + self.top_margin.saturating_sub(self.bottom_margin()) + 1,
+    fn render(self, mut area_old: Rect, buf: &mut Buffer) {
+        area_old.y = match self.vertical_alignment {
+            VerticalAlignment::Top => area_old.y,
+            VerticalAlignment::Center => area_old.bottom() / 2,
+            VerticalAlignment::Bottom => area_old.bottom().saturating_sub(3),
         };
-
-        let rep_count = (match self.orientation {
-            Orientation::Horizontal => area.width,
-            Orientation::Vertical => area.height,
-        } / 4)
-            .saturating_sub(1) as usize;
-        let left = self.left_symbol.to_string().repeat(rep_count);
-        let right = self.right_symbol.to_string().repeat(rep_count);
-
-        let mut ln = String::with_capacity(
-            1 + left.len() + 1 + left.len() + 1 + right.len() + 1 + right.len() + 1,
+        let area = area_old.inner(Margin::new(1, 1));
+        let rep_count: f32 = (match self.orientation {
+            Orientation::Horizontal => area.width as f32,
+            Orientation::Vertical => area.height as f32,
+        } / 2.0) - 2.0;
+        let space_rep_count = match self.orientation {
+            Orientation::Horizontal => self.margin.horizontal,
+            Orientation::Vertical => self.margin.vertical,
+        } as usize;
+        let ln = format!(
+            "{}{}{}{}{}{}{}",
+            String::from(" ").repeat(match self.orientation {
+                Orientation::Horizontal => (
+                    match self.horizontal_alignment {
+                        Alignment::Left => 0,
+                        Alignment::Center => self.margin.horizontal,
+                        Alignment::Right => self.margin.horizontal * 2,
+                    } as usize
+                ),
+                Orientation::Vertical => (
+                    match self.vertical_alignment {
+                        VerticalAlignment::Top => self.margin.vertical * 2,
+                        VerticalAlignment::Center => self.margin.vertical,
+                        VerticalAlignment::Bottom => 0,
+                    } as usize
+                ),
+            }),
+            self.start,
+            self.left_symbol
+                .to_string()
+                .repeat((rep_count.floor() as usize).saturating_sub(space_rep_count / 2)),
+            self.center,
+            self.right_symbol
+                .to_string()
+                .repeat(((rep_count.round() as usize).saturating_sub(1)).saturating_sub(space_rep_count / 2)),
+            self.end,
+            String::from(" ").repeat(match self.orientation {
+                Orientation::Horizontal => (
+                    match self.horizontal_alignment {
+                        Alignment::Left => self.margin.horizontal * 2,
+                        Alignment::Center => self.margin.horizontal,
+                        Alignment::Right => 0,
+                    } as usize
+                ),
+                Orientation::Vertical => (
+                    match self.vertical_alignment {
+                        VerticalAlignment::Top => 0,
+                        VerticalAlignment::Center => self.margin.vertical,
+                        VerticalAlignment::Bottom => self.margin.vertical * 2,
+                    } as usize
+                ),
+            }),
         );
-
-        ln.push(self.start);
-        ln.push_str(&left);
-        ln.push(self.left_center);
-        ln.push_str(&left);
-        ln.push(self.center);
-        ln.push_str(&right);
-        ln.push(self.right_center);
-        ln.push_str(&right);
-        ln.push(self.end);
+        macro_rules! create_raw_spans {
+            ($string:expr) => {
+                $string
+                    .chars().map(String::from)
+                    .map(Span::from)
+                    .collect::<Vec<Span>>()
+            }
+        }
         let ln = if let Some(boxed) = &self.gradient {
-            generate_gradient_text!(Line::from(ln.clone()), boxed)
+            generate_gradient_text!(Line::from(create_raw_spans!(ln)), boxed)
         } else {
-            ln.chars()
-                .map(|s| Span::from(String::from(s)))
-                .collect::<Vec<Span>>()
+            create_raw_spans!(ln)
         };
         match self.orientation {
             Orientation::Horizontal => {
-                buf.set_line(area.x, area.y, &Line::from(ln.clone()), ln.len() as u16 + 1);
+                buf.set_line(
+                    area.x,
+                    area.y,
+                    &Line::from(ln.clone()),
+                    ln.len() as u16 + 1,
+                );
             }
             Orientation::Vertical => {
-                for (y, s) in ln.iter().enumerate() {
-                    buf.set_span(area.x, area.y + y as u16, s, 1);
+                for (y_n, s) in ln.iter().enumerate() {
+                    buf.set_span(area.x, area.y + y_n as u16, s, 1);
                 }
             }
         }
@@ -256,48 +232,52 @@ mod tests {
     #[test]
     pub fn test_hr() {
         use super::*;
-        let mut buffer = Buffer::empty(Rect::new(0, 0, 20, 41));
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 48, 19));
         Block::bordered()
-            .title_top(Line::raw("T").centered())
+            .title_top(Line::raw("Horizontal").centered())
             .render(buffer.area, &mut buffer);
         Rule::default()
-            .vertical_alignment(VerticalAlignment::Bottom)
+            .horizontal_margin(1)
+            .vertical_alignment(VerticalAlignment::Center)
+            .horizontal_alignment(Alignment::Right)
+            .horizontal()
             .render(buffer.area, &mut buffer);
         #[rustfmt::skip]
         let expected = Buffer::with_lines([
-            "┌─────────────────T────────────────┐",
-            "│                                  │",
-            "│                                  │",
-            "│                                  │",
-            "│                                  │",
-            "│                                  │",
-            "│                                  │",
-            "│                                  │",
-            "│                                  │",
-            "│                                  │",
-            "│                                  │",
-            "│                                  │",
-            "│                                  │",
-            "│                                  │",
-            "│                                  │",
-            "│                                  │",
-            "│+================+===============+│",
-            "│                                  │",
-            "└──────────────────────────────────┘"]);
+            "┌─────────────────Horizontal──────────────────┐",
+            "│                                             │",
+            "│                                             │",
+            "│                                             │",
+            "│                                             │",
+            "│                                             │",
+            "│                                             │",
+            "│                                             │",
+            "│                                             │",
+            "│+=====================+=====================+│",
+            "│                                             │",
+            "│                                             │",
+            "│                                             │",
+            "│                                             │",
+            "│                                             │",
+            "│                                             │",
+            "│                                             │",
+            "│                                             │",
+            "└─────────────────────────────────────────────┘",
+            ]);
         assert_eq!(buffer, expected);
+        buffer.reset();
     }
     #[test]
     pub fn test_vr() {
         use super::*;
-        let mut buffer = Buffer::empty(Rect::new(0, 0, 20, 20));
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 48, 19));
         Block::bordered()
             .title_top(Line::raw("T").centered())
             .render(buffer.area, &mut buffer);
         Rule::default()
             .orientation(Orientation::Vertical)
             .main_symbol('│')
-            .top_margin(1)
-            .horizontal_margin(1)
+            .horizontal_alignment(Alignment::Center)
             .render(buffer.area, &mut buffer);
         #[rustfmt::skip]
         let expected = Buffer::with_lines([

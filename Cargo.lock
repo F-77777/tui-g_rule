@@ -530,6 +530,7 @@ name = "tui-rule"
 version = "0.1.0"
 dependencies = [
  "colorgrad",
+ "crossterm",
  "ratatui",
 ]
 
