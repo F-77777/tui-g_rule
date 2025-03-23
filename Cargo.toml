@@ -7,3 +7,15 @@ edition = "2024"
 colorgrad = "0.7.0"
 crossterm = "0.28.1"
 ratatui = "0.29.0"
+
+[[example]]
+name = "hor_gradient_margin"
+path = "examples/hor_gradient_margin/hor_gradient_margin.rs"
+
+[[example]]
+name = "vert_gradient_margin"
+path = "examples/vert_gradient_margin/vert_gradient_margin.rs"
+
+[[example]]
+name = "no_gradient"
+path = "examples/no_gradient/no_gradient.rs"
