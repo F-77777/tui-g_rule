@@ -1,12 +1,10 @@
 [package]
-<<<<<<< HEAD
-name = "tui-rule"
-=======
 name = "tui-g_rule"
->>>>>>> a38a66a (release v0.1.0)
-version = "0.1.0"
+version = "0.1.3"
 edition = "2024"
-
+authors = ["F-77777"]
+license = "MIT"
+description = "a pretty rule widget for ratatui"
 [dependencies]
 colorgrad = "0.7.0"
 crossterm = "0.28.1"

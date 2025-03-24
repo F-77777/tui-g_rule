@@ -1,4 +1,4 @@
-tui_rule::gen_example_code!(
+tui_g_rule::gen_example_code!(
     fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
         loop {
             terminal.draw(|f| {

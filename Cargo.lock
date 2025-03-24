@@ -526,8 +526,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "tui-rule"
-version = "0.1.0"
+name = "tui-g_rule"
+version = "0.1.3"
 dependencies = [
  "colorgrad",
  "crossterm",

@@ -538,10 +538,10 @@ pub mod macros {
     #[macro_export]
     macro_rules! gen_example_code {
         ($fun:item) => {
-            tui_rule::gen_use!();
-            tui_rule::gen_other_functions!();
-            tui_rule::gen_run!($fun);
-            tui_rule::gen_main!();
+            tui_g_rule::gen_use!();
+            tui_g_rule::gen_other_functions!();
+            tui_g_rule::gen_run!($fun);
+            tui_g_rule::gen_main!();
         };
     }
     #[macro_export]
@@ -587,7 +587,7 @@ pub mod macros {
                 DefaultTerminal, Frame,
             };
             use std::{io, rc::Rc};
-            use tui_rule::{Rule, VerticalAlignment};
+            use tui_g_rule::{Rule, VerticalAlignment};
         };
     }
 }
