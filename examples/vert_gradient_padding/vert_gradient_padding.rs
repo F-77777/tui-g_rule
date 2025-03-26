@@ -1,12 +1,16 @@
 tui_g_rule::gen_example_code!(
-    fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
+    fn run(
+        terminal: &mut DefaultTerminal,
+    ) -> io::Result<()> {
         loop {
             terminal.draw(|f| {
                 let block = Block::bordered();
-                let rule = Rule::default()
-                    .with_gradient(colorgrad::preset::warm())
-		    .vertical()
-                    .vertical_margin(1);
+                let rule = Rule::from_set(
+                    presets::test_sets::VERTICAL,
+                )
+                .with_gradient(colorgrad::preset::warm())
+                .vertical()
+                .vertical_padding(1);
                 f.render_widget(rule, f.area());
                 f.render_widget(block, f.area());
             })?;

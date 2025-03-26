@@ -5,18 +5,24 @@ edition = "2024"
 authors = ["F-77777"]
 license = "MIT"
 description = "a pretty rule widget for ratatui"
+
+[lib]
+doctest = false
+
 [dependencies]
 colorgrad = "0.7.0"
 crossterm = "0.28.1"
-ratatui = "0.29.0"
+derive_builder = "0.20.2"
+getset = "0.1.5"
+ratatui = { version = "0.29.0", features = ["unstable-widget-ref"] }
 
 [[example]]
-name = "hor_gradient_margin"
-path = "examples/hor_gradient_margin/hor_gradient_margin.rs"
+name = "hor_gradient_padding"
+path = "examples/hor_gradient_padding/hor_gradient_padding.rs"
 
 [[example]]
-name = "vert_gradient_margin"
-path = "examples/vert_gradient_margin/vert_gradient_margin.rs"
+name = "vert_gradient_padding"
+path = "examples/vert_gradient_padding/vert_gradient_padding.rs"
 
 [[example]]
 name = "no_gradient"
