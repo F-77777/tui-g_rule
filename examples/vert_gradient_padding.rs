@@ -1,4 +1,4 @@
-tui_g_rule::gen_example_code!(
+tui_rule::gen_example_code!(
     fn run(
         terminal: &mut DefaultTerminal,
     ) -> io::Result<()> {
@@ -14,8 +14,16 @@ tui_g_rule::gen_example_code!(
                 f.render_widget(rule, f.area());
                 f.render_widget(block, f.area());
             })?;
-            if let Err(e) = handle_events() {
-                eprintln!("Error handling events: {}", e);
+            let event = event::read()?;
+
+            if let Event::Key(key_event) = event {
+                if key_event.kind == KeyEventKind::Press {
+                    if let KeyCode::Char('q') =
+                        key_event.code
+                    {
+                        break Ok(());
+                    }
+                }
             }
         }
     }

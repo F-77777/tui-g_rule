@@ -5,9 +5,13 @@ use getset::{Getters, Setters};
 use ratatui::{
     layout::Margin,
     prelude::{Alignment, Buffer, Rect},
-    text::{Line, Span},
+    style::Color,
+    text::Line,
     widgets::{Padding, Widget, WidgetRef},
 };
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "all")]
 /// ## The Rule widget
 /// ### Allows:
 ///     - Vertical alignment
@@ -19,59 +23,152 @@ use ratatui::{
 ///     - Start and end symbols
 pub struct Rule {
     pub gradient: Option<Box<dyn Gradient>>,
-    pub start: char,
-    pub end: char,
-    pub center: char,
-    pub right_symbol: char,
-    pub left_symbol: char,
+    pub symbol_set: Set,
     pub orientation: Orientation,
     pub padding: Padding,
     pub vertical_alignment: VerticalAlignment,
     pub horizontal_alignment: Alignment,
+    pub extra_rep_1: usize,
+    pub extra_rep_2: usize,
+    pub bg: Bg,
+    pub area_margin: Margin,
+}
+pub enum Bg {
+    None,
+    Solid(Color),
+    Gradient,
+    GradientCustom(Box<dyn Gradient>),
+}
+#[macro_export]
+macro_rules! create_segment {
+    ($set:expr, $p_1:expr, $p_2:expr, $base_area:expr, $orientation:expr, $h_alignment:expr, $v_alignment:expr, $extra_rep_1:expr, $extra_rep_2:expr) => {{
+        let rep_count: f32 = ($base_area / 2.0) - 1.0;
+        let seg1 = $set.rep_1.to_string().repeat(
+            (rep_count.floor() as usize)
+                .saturating_sub($p_1)
+                .saturating_add($extra_rep_1),
+        );
+        let seg2 = $set.rep_2.to_string().repeat(
+            (rep_count.round() as usize)
+                .saturating_sub($p_2 + 1)
+                .saturating_add($extra_rep_2),
+        );
+        let mut ln = String::with_capacity(
+            $p_1 + $p_2
+                + 1
+                + seg1.len()
+                + 1
+                + seg2.len()
+                + 5,
+        );
+        ln.push_str(&String::from(" ").repeat(
+            match $orientation {
+                Orientation::Horizontal => {
+                    match $h_alignment {
+                        Alignment::Left => 0,
+                        Alignment::Center => $p_1,
+
+                        Alignment::Right => {
+                            $p_1.saturating_add($p_2)
+                        }
+                    }
+                }
+                Orientation::Vertical => match $v_alignment
+                {
+                    VerticalAlignment::Top => 0,
+                    VerticalAlignment::Center => $p_1,
+
+                    VerticalAlignment::Bottom => {
+                        $p_1.saturating_add($p_2)
+                    }
+                },
+            } as usize,
+        ));
+        ln.push($set.start);
+        ln.push_str(&seg1);
+        ln.push($set.center);
+        ln.push_str(&seg2);
+        ln.push($set.end);
+        ln.push_str(&String::from(" ").repeat(
+            match $orientation {
+                Orientation::Horizontal => {
+                    match $h_alignment {
+                        Alignment::Left => {
+                            $p_2.saturating_add($p_1)
+                        }
+                        Alignment::Center => $p_2,
+                        Alignment::Right => 0,
+                    }
+                }
+                Orientation::Vertical => match $v_alignment
+                {
+                    VerticalAlignment::Top => {
+                        $p_1.saturating_add($p_2)
+                    }
+                    VerticalAlignment::Center => $p_2,
+                    VerticalAlignment::Bottom => 0,
+                },
+            } as usize,
+        ));
+        ln
+    }};
 }
 /// ### Symbol set struct
 /// ```
 /// let set = Set {
 ///     start: '+',
-///     left_symbol: '─',
+///     rep_1: '─',
 ///     center: '+',
-///     right_symbol: '─',
+///     rep_2: '─',
 ///     end: '+',
 /// };
 /// let rule = Rule::from_set(set);
 /// // Contents would be "+───+───+"
 /// frame.render_widget(rule, frame.area());
 /// ```
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize)
+)]
 #[derive(Builder, Getters, Setters, Debug, Clone)]
 pub struct Set {
     #[builder(default = "'─'")]
-    start: char,
+    pub start: char,
     #[builder(default = "'─'")]
-    end: char,
+    pub end: char,
     #[builder(default = "'─'")]
-    right_symbol: char,
+    pub rep_1: char,
     #[builder(default = "'─'")]
-    left_symbol: char,
+    pub rep_2: char,
     #[builder(default = "'─'")]
-    center: char,
+    pub center: char,
 }
 /// controls rule orientation
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize)
+)]
 #[derive(Clone, Debug, PartialEq, Hash)]
 pub enum Orientation {
     Vertical,
     Horizontal,
 }
 /// vertical version of the Alignment enum
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize)
+)]
 #[derive(Clone, Debug, PartialEq, Hash)]
 pub enum VerticalAlignment {
     Top,
     Center,
     Bottom,
 }
-/// macro for generating gradient text that returns a `Line` with the inputted gradient.
+/// # Macro for generating gradient text that returns a `Vec<Span>` with the inputted gradient.
 /// # Parameters
-/// 1. any type that can be converted to Line (String, Line, &str)
+/// 1. any type that can be converted to Line (String, Line, &str, Vec<Span>)
 /// 2. a colorgrad gradient (can be either Box<dyn Gradient> or an owned type)
+///
 /// ```rust
 ///     let gradient_text = generate_gradient_text!("Rainbow Text", colorgrad::preset::rainbow());
 ///     // displays "Rainbow Text" with a rainbow gradient
@@ -79,9 +176,10 @@ pub enum VerticalAlignment {
 /// ```
 #[macro_export]
 macro_rules! generate_gradient_text {
-    ($ln:expr, $gr:expr) => {{
+    ($txt:expr, $gr:expr) => {{
         use ratatui::prelude::{Color, Style};
-        let ln: Line = $ln.into();
+        let mut ln: Line = $txt.into();
+        ln.spans = create_raw_spans!(ln.spans[0].content);
         let mut new_text = Vec::new();
         for (s, c) in ln
             .spans
@@ -97,25 +195,142 @@ macro_rules! generate_gradient_text {
                 ),
             )));
         }
-        Line::from(new_text)
+        new_text
+    }};
+    ($txt:expr, $gr:expr, $bgtype:expr) => {{
+        use ratatui::prelude::{Color, Style};
+        let mut ln: Line = $txt.into();
+        ln.spans = create_raw_spans!(ln.spans[0].content);
+        let mut new_text = Vec::new();
+        match $bgtype {
+            Bg::GradientCustom(grad) => {
+                for (s, (c, c2)) in
+                    ln.spans.clone().into_iter().zip(
+                        $gr.colors(ln.width())
+                            .into_iter()
+                            .zip(grad.colors(ln.width())),
+                    )
+                {
+                    new_text.push(
+                        s.style(
+                            Style::new()
+                                .fg(Color::Rgb(
+                                    (c.r * 255.0) as u8,
+                                    (c.g * 255.0) as u8,
+                                    (c.b * 255.0) as u8,
+                                ))
+                                .bg(Color::Rgb(
+                                    (c2.r * 255.0) as u8,
+                                    (c2.g * 255.0) as u8,
+                                    (c2.b * 255.0) as u8,
+                                )),
+                        ),
+                    );
+                } 
+            }
+            _ => {
+                for (s, c) in ln
+                    .spans
+                    .clone()
+                    .into_iter()
+                    .zip($gr.colors(ln.width()))
+                {
+                    let c = Color::Rgb(
+                        (c.r * 255.0) as u8,
+                        (c.g * 255.0) as u8,
+                        (c.b * 255.0) as u8,
+                    );
+                    new_text.push(s.style(
+                        Style::new().fg(c).bg(
+                            match $bgtype {
+                                Bg::Solid(color) => *color,
+                                Bg::Gradient => c,
+                                _ => c,
+                            },
+                        ),
+                    ));
+                }
+            }
+        }
+        new_text
     }};
 }
+#[cfg(feature = "all")]
+impl Default for Rule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+#[cfg(feature = "all")]
 impl Rule {
-    /// generates a new rule that looks like `─────────────` with no gradient and no gradient
+    /// generates a new rule that looks like `─────────────` with no gradient and no padding
     /// centered horizontally and vertically by default
     pub fn new() -> Self {
         Self {
             gradient: None,
-            start: '─',
-            end: '─',
-            center: '─',
-            left_symbol: '─',
-            right_symbol: '─',
+            symbol_set: Set {
+                start: '─',
+                end: '─',
+                center: '─',
+                rep_1: '─',
+                rep_2: '─',
+            },
             padding: Padding::new(0, 0, 0, 0),
             orientation: Orientation::Horizontal,
             horizontal_alignment: Alignment::Center,
             vertical_alignment: VerticalAlignment::Center,
+            bg: Bg::None,
+            area_margin: Margin::new(1, 1),
+            extra_rep_1: 0,
+            extra_rep_2: 0,
         }
+    }
+    pub fn area_margin(mut self, margin: Margin) -> Self {
+        self.area_margin = margin;
+        self
+    }
+    /// makes the bg solid
+    pub fn bg_solid(mut self, c: Color) -> Self {
+        self.bg = Bg::Solid(c);
+        self
+    }
+    /// makes the bg use the same gradient as the fg
+    pub fn bg_same_gradient(mut self) -> Self {
+        self.bg = Bg::Gradient;
+        self
+    }
+    pub fn extra_rep_1(mut self, rep: usize) -> Self {
+        self.extra_rep_1 = rep;
+        self
+    }
+    pub fn extra_rep_2(mut self, rep: usize) -> Self {
+        self.extra_rep_2 = rep;
+        self
+    }
+    pub fn extra_rep(
+        mut self,
+        rep_1: usize,
+        rep_2: usize,
+    ) -> Self {
+        self.extra_rep_1 = rep_1;
+        self.extra_rep_2 = rep_2;
+        self
+    }
+    /// makes the bg a custom gradient
+    pub fn bg_gradient<G: Gradient + 'static>(
+        mut self,
+        g: G,
+    ) -> Self {
+        self.bg = Bg::GradientCustom(Box::<G>::new(g));
+        self
+    }
+    pub fn bg(mut self, bg: Bg) -> Self {
+        self.bg = bg;
+        self
+    }
+    /// creates a new vertical rule
+    pub fn new_vertical() -> Self {
+        Self::new().vertical()
     }
     /// Creates a new rule instance from a Set struct
     /// ```
@@ -194,8 +409,8 @@ impl Rule {
         self = self
             .end(set.end)
             .start(set.start)
-            .right_symbol(set.right_symbol)
-            .left_symbol(set.left_symbol)
+            .rep_2(set.rep_2)
+            .rep_1(set.rep_1)
             .center(set.center);
         self
     }
@@ -211,20 +426,20 @@ impl Rule {
     }
     /// repeated symbol for right side
     /// ```rust
-    ///     Rule::default().right_symbol('-')
+    ///     Rule::default().rep_2('-')
     /// ```
     /// `+=====+-----+`
-    pub fn right_symbol(mut self, symb: char) -> Self {
-        self.right_symbol = symb;
+    pub fn rep_2(mut self, symb: char) -> Self {
+        self.symbol_set.rep_2 = symb;
         self
     }
     /// repeated symbol for left side
     /// ```rust
-    ///     Rule::default().left_symbol('-')
+    ///     Rule::default().rep_1('-')
     /// ```
     /// `+-----+=====+`
-    pub fn left_symbol(mut self, symb: char) -> Self {
-        self.left_symbol = symb;
+    pub fn rep_1(mut self, symb: char) -> Self {
+        self.symbol_set.rep_1 = symb;
         self
     }
     /// first symbol
@@ -233,7 +448,7 @@ impl Rule {
     /// ```
     /// `%=====+=====+`
     pub fn start(mut self, symb: char) -> Self {
-        self.start = symb;
+        self.symbol_set.start = symb;
         self
     }
     /// last symbol
@@ -242,7 +457,7 @@ impl Rule {
     ///```   
     /// `+=====+=====%`
     pub fn end(mut self, symb: char) -> Self {
-        self.end = symb;
+        self.symbol_set.end = symb;
         self
     }
     /// center symbol  
@@ -251,12 +466,12 @@ impl Rule {
     ///```
     /// `+=====%=====+`
     pub fn center(mut self, symb: char) -> Self {
-        self.center = symb;
+        self.symbol_set.center = symb;
         self
     }
-    /// the left_symbol and the right_symbol functions in one
+    /// the rep_1 and the rep_2 functions in one
     pub fn main_symbol(mut self, symb: char) -> Self {
-        self = self.left_symbol(symb).right_symbol(symb);
+        self = self.rep_1(symb).rep_2(symb);
         self
     }
     pub fn padding(mut self, padding: Padding) -> Self {
@@ -298,171 +513,10 @@ impl Rule {
         self
     }
 }
+#[cfg(feature = "all")]
 impl Widget for Rule {
-    fn render(self, mut area_old: Rect, buf: &mut Buffer) {
-        let (p_l, p_r, p_t, p_b) = (
-            self.padding.left,
-            self.padding.right,
-            self.padding.top,
-            self.padding.bottom,
-        );
-        if self.orientation == Orientation::Horizontal {
-            area_old.y = match self.vertical_alignment {
-                VerticalAlignment::Top => area_old
-                    .y
-                    .saturating_sub(p_b)
-                    .saturating_add(p_t),
-                VerticalAlignment::Center => {
-                    (area_old.bottom() / 2)
-                        .saturating_sub(1 + p_b)
-                        .saturating_add(p_t)
-                }
-                VerticalAlignment::Bottom => area_old
-                    .bottom()
-                    .saturating_sub(3 + p_b)
-                    .saturating_add(p_t),
-            }
-        };
-        if self.orientation == Orientation::Vertical {
-            area_old.x = match self.horizontal_alignment {
-                Alignment::Left => area_old
-                    .x
-                    .saturating_sub(self.padding.right)
-                    .saturating_add(self.padding.left),
-                Alignment::Center => (area_old.right() / 2)
-                    .saturating_sub(1 + self.padding.right)
-                    .saturating_add(self.padding.left),
-
-                Alignment::Right => area_old
-                    .right()
-                    .saturating_sub(3 + self.padding.right),
-            }
-        };
-        let area = area_old.inner(Margin::new(1, 1));
-        let rep_count: f32 = (match self.orientation {
-            Orientation::Horizontal => area.width as f32,
-            Orientation::Vertical => area.height as f32,
-        } / 2.0)
-            - 1.0;
-        let padding1 = match self.orientation {
-            Orientation::Vertical => p_t,
-            Orientation::Horizontal => p_l,
-        } as usize;
-        let padding2 = match self.orientation {
-            Orientation::Vertical => p_b,
-            Orientation::Horizontal => p_r,
-        } as usize;
-        let seg1 = self.left_symbol.to_string().repeat(
-            (rep_count.floor() as usize)
-                .saturating_sub(padding1),
-        );
-        let seg2 = self.right_symbol.to_string().repeat(
-            (rep_count.round() as usize)
-                .saturating_sub(padding2 + 1),
-        );
-
-        let mut ln = String::with_capacity(
-            padding1
-                + padding2
-                + 1
-                + seg1.len()
-                + 1
-                + seg2.len()
-                + 1
-                + 4,
-        );
-        ln.push_str(&String::from(" ").repeat(
-            match self.orientation {
-                Orientation::Horizontal => {
-                    match self.horizontal_alignment {
-                        Alignment::Left => 0,
-                        Alignment::Center => p_l,
-
-                        Alignment::Right => {
-                            p_l.saturating_add(p_r)
-                        }
-                    }
-                }
-                Orientation::Vertical => {
-                    match self.vertical_alignment {
-                        VerticalAlignment::Top => 0,
-                        VerticalAlignment::Center => p_t,
-
-                        VerticalAlignment::Bottom => {
-                            p_t.saturating_add(p_b)
-                        }
-                    }
-                }
-            } as usize,
-        ));
-        ln.push(self.start);
-        ln.push_str(seg1.as_str());
-        ln.push(self.center);
-        ln.push_str(seg2.as_str());
-        ln.push(self.end);
-        ln.push_str(
-            String::from(" ")
-                .repeat(match self.orientation {
-                    Orientation::Horizontal => {
-                        match self.horizontal_alignment {
-                            Alignment::Left => {
-                                p_r.saturating_add(p_l)
-                            }
-                            Alignment::Center => p_r,
-                            Alignment::Right => 0,
-                        }
-                    }
-                    Orientation::Vertical => {
-                        match self.vertical_alignment {
-                            VerticalAlignment::Top => {
-                                p_t.saturating_add(p_b)
-                            }
-                            VerticalAlignment::Center => {
-                                p_b
-                            }
-                            VerticalAlignment::Bottom => 0,
-                        }
-                    }
-                } as usize)
-                .as_str(),
-        );
-        macro_rules! create_raw_spans {
-            ($string:expr) => {
-                $string
-                    .chars()
-                    .map(String::from)
-                    .map(Span::from)
-                    .collect::<Vec<Span>>()
-            };
-        }
-        let ln = if let Some(boxed) = &self.gradient {
-            generate_gradient_text!(
-                Line::from(create_raw_spans!(ln)),
-                boxed
-            )
-        } else {
-            Line::from(create_raw_spans!(ln))
-        };
-        match self.orientation {
-            Orientation::Horizontal => {
-                buf.set_line(
-                    area.x,
-                    area.y,
-                    &ln,
-                    ln.spans.len() as u16 + 1,
-                );
-            }
-            Orientation::Vertical => {
-                for (y_n, s) in ln.iter().enumerate() {
-                    buf.set_span(
-                        area.x,
-                        area.y + y_n as u16,
-                        s,
-                        1,
-                    );
-                }
-            }
-        }
+    fn render(self, area_old: Rect, buf: &mut Buffer) {
+        self.render_ref(area_old, buf);
     }
 }
 #[cfg(test)]
@@ -712,6 +766,7 @@ mod tests {
     }
 }
 pub mod macros {
+    #[cfg(feature = "utils")]
     #[macro_export]
     macro_rules! gen_main {
         () => {
@@ -723,49 +778,23 @@ pub mod macros {
             }
         };
     }
+    #[cfg(feature = "utils")]
     #[macro_export]
     macro_rules! gen_example_code {
         ($fun:item) => {
-            tui_g_rule::gen_use!();
-            tui_g_rule::gen_other_functions!();
-            tui_g_rule::gen_run!($fun);
-            tui_g_rule::gen_main!();
+            tui_rule::gen_use!();
+            tui_rule::gen_run!($fun);
+            tui_rule::gen_main!();
         };
     }
+    #[cfg(feature = "utils")]
     #[macro_export]
     macro_rules! gen_run {
         ($fun:item) => {
             $fun
         };
     }
-    #[macro_export]
-    macro_rules! gen_other_functions {
-        () => {
-            fn handle_events() -> io::Result<()> {
-                match event::read()? {
-                    Event::Key(key_event)
-                        if key_event.kind
-                            == KeyEventKind::Press =>
-                    {
-                        handle_key_event(key_event)
-                    }
-                    _ => Ok(()),
-                }
-            }
-
-            fn handle_key_event(
-                key_event: KeyEvent,
-            ) -> io::Result<()> {
-                match key_event.code {
-                    KeyCode::Char('q') => {
-                        let _ = ratatui::restore();
-                        std::process::exit(0);
-                    }
-                    _ => Ok(()),
-                }
-            }
-        };
-    }
+    #[cfg(feature = "utils")]
     #[macro_export]
     macro_rules! gen_use {
         () => {
@@ -783,9 +812,17 @@ pub mod macros {
                 widgets::{Block, Widget},
             };
             use std::{io, rc::Rc};
-            use tui_g_rule::{
-                Rule, VerticalAlignment, presets,
-            };
+            use tui_rule::*;
+        };
+    }
+    #[macro_export]
+    macro_rules! create_raw_spans {
+        ($string:expr) => {
+            $string
+                .chars()
+                .map(String::from)
+                .map(ratatui::text::Span::from)
+                .collect::<Vec<ratatui::text::Span>>()
         };
     }
 }
@@ -818,6 +855,7 @@ impl WidgetRef for Rule {
                     .saturating_sub(3 + p_b)
                     .saturating_add(p_t),
             }
+            .saturating_sub(self.extra_rep_1 as u16);
         };
         if self.orientation == Orientation::Vertical {
             area_old.x = match self.horizontal_alignment {
@@ -833,111 +871,44 @@ impl WidgetRef for Rule {
                     .right()
                     .saturating_sub(3 + self.padding.right),
             }
+            .saturating_sub(self.extra_rep_1 as u16);
         };
-        let area = area_old.inner(Margin::new(1, 1));
-        let rep_count: f32 = (match self.orientation {
-            Orientation::Horizontal => area.width as f32,
-            Orientation::Vertical => area.height as f32,
-        } / 2.0)
-            - 1.0;
-        let padding1 = match self.orientation {
-            Orientation::Vertical => p_t,
-            Orientation::Horizontal => p_l,
-        } as usize;
-        let padding2 = match self.orientation {
-            Orientation::Vertical => p_b,
-            Orientation::Horizontal => p_r,
-        } as usize;
-        let seg1 = self.left_symbol.to_string().repeat(
-            (rep_count.floor() as usize)
-                .saturating_sub(padding1),
-        );
-        let seg2 = self.right_symbol.to_string().repeat(
-            (rep_count.round() as usize)
-                .saturating_sub(padding2 + 1),
-        );
 
-        let mut ln = String::with_capacity(
-            padding1
-                + padding2
-                + 1
-                + seg1.len()
-                + 1
-                + seg2.len()
-                + 1
-                + 4,
-        );
-        ln.push_str(&String::from(" ").repeat(
+        let area = area_old.inner(self.area_margin);
+
+        let ln = create_segment!(
+            self.symbol_set,
             match self.orientation {
-                Orientation::Horizontal => {
-                    match self.horizontal_alignment {
-                        Alignment::Left => 0,
-                        Alignment::Center => p_l,
-
-                        Alignment::Right => {
-                            p_l.saturating_add(p_r)
-                        }
-                    }
-                }
-                Orientation::Vertical => {
-                    match self.vertical_alignment {
-                        VerticalAlignment::Top => 0,
-                        VerticalAlignment::Center => p_t,
-
-                        VerticalAlignment::Bottom => {
-                            p_t.saturating_add(p_b)
-                        }
-                    }
-                }
+                Orientation::Vertical => p_t,
+                Orientation::Horizontal => p_l,
             } as usize,
-        ));
-        ln.push(self.start);
-        ln.push_str(seg1.as_str());
-        ln.push(self.center);
-        ln.push_str(seg2.as_str());
-        ln.push(self.end);
-        ln.push_str(
-            String::from(" ")
-                .repeat(match self.orientation {
-                    Orientation::Horizontal => {
-                        match self.horizontal_alignment {
-                            Alignment::Left => {
-                                p_r.saturating_add(p_l)
-                            }
-                            Alignment::Center => p_r,
-                            Alignment::Right => 0,
-                        }
-                    }
-                    Orientation::Vertical => {
-                        match self.vertical_alignment {
-                            VerticalAlignment::Top => {
-                                p_t.saturating_add(p_b)
-                            }
-                            VerticalAlignment::Center => {
-                                p_b
-                            }
-                            VerticalAlignment::Bottom => 0,
-                        }
-                    }
-                } as usize)
-                .as_str(),
+            match self.orientation {
+                Orientation::Vertical => p_b,
+                Orientation::Horizontal => p_r,
+            } as usize,
+            match self.orientation {
+                Orientation::Horizontal =>
+                    area.width as f32,
+                Orientation::Vertical => area.height as f32,
+            },
+            self.orientation,
+            self.horizontal_alignment,
+            self.vertical_alignment,
+            self.extra_rep_1,
+            self.extra_rep_2
         );
-        macro_rules! create_raw_spans {
-            ($string:expr) => {
-                $string
-                    .chars()
-                    .map(String::from)
-                    .map(Span::from)
-                    .collect::<Vec<Span>>()
-            };
-        }
+
         let ln = if let Some(boxed) = &self.gradient {
-            generate_gradient_text!(
-                Line::from(create_raw_spans!(ln)),
-                boxed
-            )
+            match self.bg {
+                Bg::None => Line::from(
+                    generate_gradient_text!(ln, boxed),
+                ),
+                _ => Line::from(generate_gradient_text!(
+                    ln, boxed, &self.bg
+                )),
+            }
         } else {
-            Line::from(create_raw_spans!(ln))
+            Line::from(crate::create_raw_spans!(ln))
         };
         match self.orientation {
             Orientation::Horizontal => {
