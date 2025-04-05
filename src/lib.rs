@@ -226,7 +226,7 @@ macro_rules! generate_gradient_text {
                                 )),
                         ),
                     );
-                } 
+                }
             }
             _ => {
                 for (s, c) in ln
@@ -804,12 +804,12 @@ pub mod macros {
                 KeyEventKind,
             };
             use ratatui::{
-                DefaultTerminal, Frame,
                 buffer::Buffer,
                 layout::Rect,
                 prelude::{Alignment, Color, Style},
                 text::Line,
                 widgets::{Block, Widget},
+                DefaultTerminal, Frame,
             };
             use std::{io, rc::Rc};
             use tui_rule::*;
@@ -852,7 +852,10 @@ impl WidgetRef for Rule {
                 }
                 VerticalAlignment::Bottom => area_old
                     .bottom()
-                    .saturating_sub(3 + p_b)
+                    .saturating_sub(
+                        1 + p_b
+                            + self.area_margin.vertical * 2,
+                    )
                     .saturating_add(p_t),
             }
             .saturating_sub(self.extra_rep_1 as u16);
@@ -861,15 +864,19 @@ impl WidgetRef for Rule {
             area_old.x = match self.horizontal_alignment {
                 Alignment::Left => area_old
                     .x
-                    .saturating_sub(self.padding.right)
-                    .saturating_add(self.padding.left),
+                    .saturating_sub(p_r)
+                    .saturating_add(p_l),
                 Alignment::Center => (area_old.right() / 2)
-                    .saturating_sub(1 + self.padding.right)
-                    .saturating_add(self.padding.left),
+                    .saturating_sub(1 + p_r)
+                    .saturating_add(p_l),
 
-                Alignment::Right => area_old
-                    .right()
-                    .saturating_sub(3 + self.padding.right),
+                Alignment::Right => {
+                    area_old.right().saturating_sub(
+                        1 + p_r
+                            + self.area_margin.horizontal
+                                * 2,
+                    )
+                }
             }
             .saturating_sub(self.extra_rep_1 as u16);
         };

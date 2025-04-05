@@ -105,6 +105,119 @@ pub mod vertical {
         end: '+',
     };
 }
+pub mod borders {
+    pub mod plain {
+        use crate::Set;
+        pub const RIGHT: Set = Set {
+            start: '┐',
+            rep_1: '│',
+            center: '│',
+            rep_2: '│',
+            end: '┘',
+        };
+        pub const LEFT: Set = Set {
+            start: '┌',
+            rep_1: '│',
+            center: '│',
+            rep_2: '│',
+            end: '└',
+        };
+        pub const TOP: Set = Set {
+            start: '┌',
+            rep_1: '─',
+            center: '─',
+            rep_2: '─',
+            end: '┐',
+        };
+        pub const BOTTOM: Set = Set {
+            start: '└',
+            rep_1: '─',
+            center: '─',
+            rep_2: '─',
+            end: '┘',
+        };
+    }
+    pub mod double {
+        use crate::Set;
+
+        pub const RIGHT: Set = Set {
+            start: '╗',
+            rep_1: '║',
+            center: '║',
+            rep_2: '║',
+            end: '╝',
+        };
+
+        pub const LEFT: Set = Set {
+            start: '╔',
+            rep_1: '║',
+            center: '║',
+            rep_2: '║',
+            end: '╚',
+        };
+
+        pub const TOP: Set = Set {
+            start: '╔',
+            rep_1: '═',
+            center: '═',
+            rep_2: '═',
+            end: '╗',
+        };
+
+        pub const BOTTOM: Set = Set {
+            start: '╚',
+            rep_1: '═',
+            center: '═',
+            rep_2: '═',
+            end: '╝',
+        };
+    }
+    pub mod rounded {
+        use crate::Set;
+
+        pub const RIGHT: Set = Set {
+            start: '╮',
+            rep_1: '│',
+            center: '│',
+            rep_2: '│',
+            end: '╯',
+        };
+
+        pub const LEFT: Set = Set {
+            start: '╭',
+            rep_1: '│',
+            center: '│',
+            rep_2: '│',
+            end: '╰',
+        };
+
+        pub const TOP: Set = Set {
+            start: '╭',
+            rep_1: '─',
+            center: '─',
+            rep_2: '─',
+            end: '╮',
+        };
+
+        pub const BOTTOM: Set = Set {
+            start: '╰',
+            rep_1: '─',
+            center: '─',
+            rep_2: '─',
+            end: '╯',
+        };
+    }
+}
+pub mod neutral {
+    pub use crate::Set;
+    pub const EMPTY: Set = Set {
+        start: ' ',
+        rep_1: ' ',
+        center: ' ',
+        rep_2: ' ',
+        end: ' ',
+    };
+}
 pub mod test_sets {
     pub use crate::Set;
     pub const VERTICAL: Set = Set {

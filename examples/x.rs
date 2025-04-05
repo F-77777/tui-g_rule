@@ -11,14 +11,23 @@ tui_rule::gen_example_code!(
                     ))
                     .centered(),
                 );
-                let rule_hor = Rule::from_set(
-                    presets::horizontal::ASCII,
-                )
-                .bg(Bg::Solid(Color::Green))
-                .horizontal_padding(1)
-                .with_gradient(colorgrad::preset::warm());
-                f.render_widget(rule_hor, f.area());
-                f.render_widget(block, f.area());
+                use presets::borders::plain::*;
+                let marg =
+                    ratatui::layout::Margin::new(0, 0);
+                let right = Rule::from_set(RIGHT)
+                    .area_margin(marg)
+                    .horizontal_alignment(Alignment::Right)
+                    .vertical();
+                let left = Rule::from_set(LEFT)
+                    .area_margin(marg)
+                    .horizontal_alignment(Alignment::Left)
+                    .vertical();
+                let top = Rule::from_set(TOP).area_margin(marg).vertical_alignment(VerticalAlignment::Top);
+                let bottom = Rule::from_set(BOTTOM).area_margin(marg).vertical_alignment(VerticalAlignment::Bottom);
+                f.render_widget(right, f.area());
+                f.render_widget(left, f.area());
+                f.render_widget(top, f.area());
+                f.render_widget(bottom, f.area());
             })?;
             let event = event::read()?;
             if let Event::Key(key_event) = event {
